@@ -1,6 +1,6 @@
 # check_multiple
 
-This plugin will let you pass in a list of commands to be executed. It can be configured to fail if one command fails, or only if they all fail.
+Nagios plugin used to execute multiple commands in series. It can be configured to fail if one command fails, or only if they all fail.
 
 example command that will check SSH and ping host:
 ```
