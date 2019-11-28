@@ -1,83 +1,100 @@
-#! /usr/bin/env python
+#!/usr/bin/env python2.7
 
 import sys
-import getopt
-import optparse
-import commands
-    
-def returnStatus(statusInfo,checkMode):
-    statusResult = None
+import argparse
+import subprocess
+from multiprocessing.pool import ThreadPool
+
+
+def return_status(status_info, check_mode):
     output = ""
-    failCount = 0
-    successCount = 0
-    for line in statusInfo:
-        cStatus = line[0]
-        cOutput = line[1].replace("\n"," ")        
-        output = cOutput + "\n"
-        if cStatus > 0:
-            failCount = failCount + 1
-        if cStatus == 0:
-            successCount = successCount + 1
-    
-    counts = str(failCount)+ " failed "+str(successCount)+ " succeeded"
-    
-    returnCode = 3
-    if checkMode == "one":
-        if successCount > 0:
-            returnCode = 0
+    fail_count = 0
+    success_count = 0
+    for line in status_info:
+        c_status = line[0]
+        c_output = line[1].replace("\n", " ")
+        output += c_output + "\n"
+        if c_status > 0:
+            fail_count = fail_count + 1
+        if c_status == 0:
+            success_count = success_count + 1
+
+    counts = str(fail_count) + " failed " + str(success_count) + " succeeded"
+
+    return_code = 3
+    if check_mode == "one":
+        if success_count > 0:
+            return_code = 0
         else:
-            returnCode = 2
-    elif checkMode == "all":
-        if failCount == 0:
-            returnCode = 0
+            return_code = 2
+    elif check_mode == "all":
+        if fail_count == 0:
+            return_code = 0
         else:
-            returnCode = 2
-    
-    if returnCode == 0:
-        output = "MULTIPLE CHECK OK: " + counts + "\n"+ output
-    elif returnCode >0:
-        output = "MULTIPLE CHECK CRITICAL: " + counts + "\n"+ output
-        
-    print output
-    sys.exit(returnCode);
-    
-def runCommands(commandList):
-    statusInfo = []
-    #loop through all the commands
-    for i in commandList:
-        i = i.lstrip().rstrip()        
-        #run the command
-        (cStatus,cOutput) = commands.getstatusoutput(i)
-        #store the result
-        statusInfo.insert(0,[cStatus,cOutput])
-    return statusInfo
-    
+            return_code = 2
+
+    if return_code == 0:
+        output = "MULTIPLE CHECK OK: " + counts + "\n" + output
+    elif return_code > 0:
+        output = "MULTIPLE CHECK CRITICAL: " + counts + "\n" + output
+
+    print(output)
+    sys.exit(return_code)
+
+
+class Task(object):
+
+    exitcode = None
+    output = ''
+
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    def __call__(self):
+        p = subprocess.Popen(
+            self.cmd, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.output, _ = p.communicate()
+        self.exitcode = p.returncode
+
+
+def run_commands(command_list):
+    tasks = []
+    pool = ThreadPool(5)
+    for i in command_list:
+        i = i.lstrip().rstrip()
+        task = Task(i)
+        pool.apply_async(task)
+        tasks.append(task)
+
+    pool.close()
+    pool.join()
+
+    status_info = []
+    for task in tasks:
+        status_info.insert(0, [task.exitcode, task.output])
+    return status_info
+
+
 def main():
-    parser = optparse.OptionParser()
-    parser.add_option("--commands",dest="commands",help="string of commands to run. enclose in quotes. seperate each command by @#%  eg command1@#%command2")
-    parser.add_option("--mode",dest="mode",help="specify 'one' or 'all'.  'one' will return true if any one of the checks is successfull. 'all' will return false if any one of the checks fail. default is all")
-    (options, args) = parser.parse_args(sys.argv[1:])
+    parser = argparse.ArgumentParser(
+        description='Run multiple Nagios checks at once.')
+    parser.add_argument(
+        "--mode",
+        default='all',
+        choices=['all', 'one'],
+        help="Specify `one` or `all`. `one` will return OK if any one of the "
+        "checks is successfull. `all` will return CRITICAL if any one of the "
+        "checks fail. default is `all`.")
+    parser.add_argument(
+        "commands",
+        nargs="+",
+        help="Checks to run. Enclose (separately) in quotes.")
 
-    #set checkMode
-    checkMode = "all"
-    if not options.mode or options.mode == "all":
-        checkMode = "all"
-    elif options.mode == "one":
-        checkMode = "one"
+    args = parser.parse_args()
 
-    #ensure commands were specified
-    if not options.commands:
-        print "no commands specified"
-        sys.exit(3)
-        return
-    
-    commandList = options.commands.split("@#%")
-
-    #run the commands
-    commandsStatus = runCommands(commandList)  
-    
-    #process the results
-    returnStatus(commandsStatus,checkMode)
+    commands_status = run_commands(args.commands)
+    return_status(commands_status, args.mode)
 
 
 if __name__ == "__main__":

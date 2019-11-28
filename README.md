@@ -2,7 +2,7 @@
 
 Nagios plugin used to execute multiple commands in series. It can be configured to fail if one command fails, or only if they all fail.
 
-example command that will check SSH and ping host:
+Example command that will check SSH and ping host:
 ```
 define command{
 command_name check-host-alive-multiple
@@ -11,9 +11,19 @@ command_line $USER1$/check_multiple --mode one --commands "$USER1$/check_ping -H
 }
 ```
 
-usage: check_multiple [options]
-options:
--h, --help show this help message and exit
---commands=COMMANDS string of commands to run. enclose in quotes. seperate each command by @#% eg command1@#%command2
+Run from the command line:
+```
+usage: check_multiple.py [-h] [--mode {all,one}] commands [commands ...]
 
---mode=MODE specify 'one' or 'all'. 'one' will return true if any one of the checks is successfull. 'all' will return false if any one of the checks fail. default is all
+Run multiple Nagios checks at once.
+
+positional arguments:
+  commands          Checks to run. Enclose (separately) in quotes.
+
+optional arguments:
+  -h, --help        show this help message and exit
+  --mode {all,one}  Specify `one` or `all`. `one` will return OK if any one of
+                    the checks is successfull. `all` will return CRITICAL if
+                    any one of the checks fail. default is `all`.
+
+```
