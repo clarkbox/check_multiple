@@ -3,6 +3,7 @@
 import sys
 import argparse
 import subprocess
+import unittest
 from multiprocessing.pool import Pool
 
 # Return codes specified by the Nagios plugin API.
@@ -95,3 +96,42 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+class ExitCodeTestCase(unittest.TestCase):
+    """
+    Run the shell commands "true" and "false" in parallel to ensure
+    that our return code is what we think it should be.
+    """
+    def test_mode_one_true_true_exit_code(self):
+        exitcode,_ = process_results(run_commands(["true", "true"]), "one")
+        self.assertEqual(exitcode, EXIT_OK)
+
+    def test_mode_one_true_false_exit_code(self):
+        exitcode,_ = process_results(run_commands(["true", "false"]), "one")
+        self.assertEqual(exitcode, EXIT_OK)
+
+    def test_mode_one_false_true_exit_code(self):
+        exitcode,_ = process_results(run_commands(["false", "true"]), "one")
+        self.assertEqual(exitcode, EXIT_OK)
+
+    def test_mode_one_false_false_exit_code(self):
+        exitcode,_ = process_results(run_commands(["false", "false"]), "one")
+        self.assertEqual(exitcode, EXIT_CRITICAL)
+
+    def test_mode_all_true_true_exit_code(self):
+        exitcode,_ = process_results(run_commands(["true", "true"]), "all")
+        self.assertEqual(exitcode, EXIT_OK)
+
+    def test_mode_all_true_false_exit_code(self):
+        exitcode,_ = process_results(run_commands(["true", "false"]), "all")
+        self.assertEqual(exitcode, EXIT_CRITICAL)
+
+    def test_mode_all_false_true_exit_code(self):
+        exitcode,_ = process_results(run_commands(["false", "true"]), "all")
+        self.assertEqual(exitcode, EXIT_CRITICAL)
+
+    def test_mode_all_false_false_exit_code(self):
+        exitcode,_ = process_results(run_commands(["false", "false"]), "all")
+        self.assertEqual(exitcode, EXIT_CRITICAL)

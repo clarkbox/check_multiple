@@ -26,3 +26,13 @@ optional arguments:
   --mode {all,one}  which individual checks must succeed before the whole
                     check does; either "one" or "all" of them (default: all)
 ```
+
+Run the test suite:
+```
+$ python -m unittest check_multiple.py
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.928s
+
+OK
+```
