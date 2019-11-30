@@ -49,4 +49,4 @@ OK
 
 Requirements:
 
-* Python 3.5 or greater.
+* Python 3.5 or greater (tested up to Python 3.8).
