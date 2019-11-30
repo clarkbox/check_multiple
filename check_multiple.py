@@ -19,23 +19,23 @@ def process_results(results, check_mode):
     output) pair.
     """
     output = ""
-    fail_count = 0
-    success_count = 0
+    critical_count = 0
+    ok_count = 0
 
     for (c_status, c_output) in results:
         if c_status == 0:
-            success_count += 1
+            ok_count += 1
         else:
-            fail_count += 1
+            critical_count += 1
         if len(c_output) > 0:
             output += c_output.replace("\n", " ") + "\n"
 
-    counts = str(fail_count) + " failed, " + str(success_count) + " succeeded"
+    counts = str(critical_count) + " critical, " + str(ok_count) + " ok"
 
     return_code = EXIT_OK
-    if check_mode == "one" and success_count == 0:
+    if check_mode == "one" and ok_count == 0:
         return_code = EXIT_CRITICAL
-    if check_mode == "all" and fail_count != 0:
+    if check_mode == "all" and critical_count != 0:
         return_code = EXIT_CRITICAL
 
     result_string = "OK"
