@@ -78,18 +78,17 @@ def run_commands(command_list):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Run multiple Nagios checks at once.')
+        description='Run multiple Nagios checks and combine the results.')
     parser.add_argument(
         "--mode",
         default='all',
         choices=['all', 'one'],
-        help="Specify `one` or `all`. `one` will return OK if any one of the "
-        "checks is successfull. `all` will return CRITICAL if any one of the "
-        "checks fail. default is `all`.")
+        help="which individual checks must succeed before the whole check "
+             "does; either \"one\" or \"all\" of them (default: all)")
     parser.add_argument(
         "command",
         nargs="+",
-        help="Checks to run. Enclose (separately) in quotes.")
+        help="check to run, enclosed in quotes")
 
     args = parser.parse_args()
 
