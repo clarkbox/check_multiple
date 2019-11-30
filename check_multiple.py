@@ -60,7 +60,7 @@ class Task(object):
 
 def run_commands(command_list):
     tasks = []
-    pool = ThreadPool(5)
+    pool = ThreadPool()
     for i in command_list:
         i = i.lstrip().rstrip()
         task = Task(i)
