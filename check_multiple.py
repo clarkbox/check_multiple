@@ -1,79 +1,72 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/python3
 
 import sys
 import argparse
 import subprocess
-from multiprocessing.pool import ThreadPool
+from multiprocessing.pool import Pool
 
 
-def return_status(status_info, check_mode):
+def process_results(results, check_mode):
+    """
+    Process the list of individual (exitcode, output) `results`
+    according to `check_mode`, and return an overall (exitcode,
+    output) pair.
+    """
     output = ""
     fail_count = 0
     success_count = 0
-    for line in status_info:
-        c_status = line[0]
-        c_output = line[1].replace("\n", " ")
-        output += c_output + "\n"
-        if c_status > 0:
-            fail_count = fail_count + 1
+
+    for (c_status, c_output) in results:
         if c_status == 0:
-            success_count = success_count + 1
-
-    counts = str(fail_count) + " failed " + str(success_count) + " succeeded"
-
-    return_code = 3
-    if check_mode == "one":
-        if success_count > 0:
-            return_code = 0
+            success_count += 1
         else:
-            return_code = 2
-    elif check_mode == "all":
-        if fail_count == 0:
-            return_code = 0
-        else:
-            return_code = 2
+            fail_count += 1
+        if len(c_output) > 0:
+            output += c_output.replace("\n", " ") + "\n"
 
-    if return_code == 0:
-        output = "MULTIPLE CHECK OK: " + counts + "\n" + output
-    elif return_code > 0:
-        output = "MULTIPLE CHECK CRITICAL: " + counts + "\n" + output
+    counts = str(fail_count) + " failed, " + str(success_count) + " succeeded"
 
-    print(output)
-    sys.exit(return_code)
+    return_code = 0
+    if check_mode == "one" and success_count == 0:
+        return_code = 2
+    if check_mode == "all" and fail_count != 0:
+        return_code = 2
+
+    result_string = "OK"
+    if return_code != 0:
+        result_string = "CRITICAL"
+
+    output = "MULTIPLE CHECK " + result_string + ": " + counts + "\n" + output
+    return (return_code, output)
 
 
-class Task(object):
+def run_command(c):
+    """
+    Run a single command in a shell, capturing its output as text.
 
-    exitcode = None
-    output = ''
-
-    def __init__(self, cmd):
-        self.cmd = cmd
-
-    def __call__(self):
-        p = subprocess.Popen(
-            self.cmd, shell=True,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        self.output, _ = p.communicate()
-        self.exitcode = p.returncode
+    Returns a single CompletedProcess instance.
+    """
+    # The "capture_output=True" keyword argument that we would like to
+    # pass to run() doesn't exist before python-3.7. Likewise, the
+    # "universal_newlines" argument has been renamed to "text", but
+    # only in python 3.7.
+    return subprocess.run(c,
+                          shell=True,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE,
+                          universal_newlines=True)
 
 
 def run_commands(command_list):
-    tasks = []
-    pool = ThreadPool()
-    for i in command_list:
-        i = i.lstrip().rstrip()
-        task = Task(i)
-        pool.apply_async(task)
-        tasks.append(task)
-
+    """
+    Run a list of commands, and return a list of (exitcode, output) pairs.
+    """
+    pool = Pool()
+    results = pool.map(run_command, command_list)
     pool.close()
     pool.join()
 
-    status_info = []
-    for task in tasks:
-        status_info.insert(0, [task.exitcode, task.output])
-    return status_info
+    return [ (result.returncode, result.stdout) for result in results ]
 
 
 def main():
@@ -91,10 +84,9 @@ def main():
         help="check to run, enclosed in quotes")
 
     args = parser.parse_args()
-
-    commands_status = run_commands(args.command)
-    return_status(commands_status, args.mode)
-
+    exitcode,output = process_results(run_commands(args.command), args.mode)
+    print(output)
+    sys.exit(exitcode)
 
 if __name__ == "__main__":
     main()
