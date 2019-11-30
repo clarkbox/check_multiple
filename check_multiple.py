@@ -5,6 +5,11 @@ import argparse
 import subprocess
 from multiprocessing.pool import Pool
 
+# Return codes specified by the Nagios plugin API.
+EXIT_OK = 0
+EXIT_WARNING = 1
+EXIT_CRITICAL = 2
+EXIT_UNKNOWN = 3
 
 def process_results(results, check_mode):
     """
@@ -26,14 +31,14 @@ def process_results(results, check_mode):
 
     counts = str(fail_count) + " failed, " + str(success_count) + " succeeded"
 
-    return_code = 0
+    return_code = EXIT_OK
     if check_mode == "one" and success_count == 0:
-        return_code = 2
+        return_code = EXIT_CRITICAL
     if check_mode == "all" and fail_count != 0:
-        return_code = 2
+        return_code = EXIT_CRITICAL
 
     result_string = "OK"
-    if return_code != 0:
+    if return_code != EXIT_OK:
         result_string = "CRITICAL"
 
     output = "MULTIPLE CHECK " + result_string + ": " + counts + "\n" + output
