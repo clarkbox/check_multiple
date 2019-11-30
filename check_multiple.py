@@ -16,6 +16,12 @@ EXIT_STRINGS = ["OK",
                 "CRITICAL",
                 "UNKNOWN"]
 
+
+# Numeric constants for our two modes, so that we don't have to pass
+# strings around everywhere.
+MODE_BEST = 0
+MODE_WORST = 1
+
 def process_results(results, check_mode):
     """
     Process the list of individual (exitcode, output) `results`
@@ -35,19 +41,11 @@ def process_results(results, check_mode):
     counts += str(warning_count) + " warning, "
     counts += str(ok_count) + " ok"
 
-    return_code = EXIT_OK
     worst_status = max(statuses)
     best_status = min(statuses)
-    if check_mode == "one" and best_status != EXIT_OK:
-        # We won't get an overall OK unless an individual status was
-        # OK... but if the individual statuses are all WARNING, then
-        # we should return WARNING as well, and not CRITICAL.
+    if check_mode == MODE_BEST:
         return_code = best_status
-    if check_mode == "all" and worst_status != EXIT_OK:
-        # If any check was not OK, then we want to return the worst
-        # not-OK status. If there was one warning and a bunch of OKs,
-        # then we want to return WARNING. If anything was critical, we
-        # want to return critical.
+    else:
         return_code = worst_status
 
     output = "MULTIPLE CHECK " + EXIT_STRINGS[return_code]
@@ -89,17 +87,20 @@ def main():
         description='Run multiple Nagios checks and combine the results.')
     parser.add_argument(
         "--mode",
-        default='all',
-        choices=['all', 'one'],
-        help="which individual checks must succeed before the whole check "
-             "does; either \"one\" or \"all\" of them (default: all)")
+        default='worst',
+        choices=['worst', 'best'],
+        help="which individual check result should be the overall result; "
+             "either the \"worst\" one or the \"best\" one (default: worst)")
     parser.add_argument(
         "command",
         nargs="+",
         help="check to run, enclosed in quotes")
 
     args = parser.parse_args()
-    exitcode,output = process_results(run_commands(args.command), args.mode)
+    mode = MODE_WORST
+    if args.mode == "best":
+        mode = MODE_BEST
+    exitcode,output = process_results(run_commands(args.command), mode)
     print(output)
     sys.exit(exitcode)
 
@@ -108,288 +109,290 @@ if __name__ == "__main__":
 
 
 
-ok = "exit " + str(EXIT_OK)
-warning = "exit " + str(EXIT_WARNING)
-critical = "exit " + str(EXIT_CRITICAL)
 class ExitCodeTestCase(unittest.TestCase):
     """
     Run the shell commands "true" and "false" in parallel to ensure
     that our return code is what we think it should be.
     """
 
+    # Shell commands that return the desired status.
+    ok = "exit " + str(EXIT_OK)
+    warning = "exit " + str(EXIT_WARNING)
+    critical = "exit " + str(EXIT_CRITICAL)
+
     #
-    # Mode "one", all 3^3 possible results for three commands.
+    # MODE_BEST, all 3^3 possible results for three commands.
     #
     def test_mode_one_ok_ok_ok_exit_code(self):
-        commands = [ok, ok, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.ok, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_ok_warning_exit_code(self):
-        commands = [ok, ok, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.ok, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_ok_critical_exit_code(self):
-        commands = [ok, ok, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.ok, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_warning_ok_exit_code(self):
-        commands = [ok, warning, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.warning, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_warning_warning_exit_code(self):
-        commands = [ok, warning, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.warning, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_warning_critical_exit_code(self):
-        commands = [ok, warning, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.warning, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_critical_ok_exit_code(self):
-        commands = [ok, critical, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.critical, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_critical_warning_exit_code(self):
-        commands = [ok, critical, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.critical, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_ok_critical_critical_exit_code(self):
-        commands = [ok, critical, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.ok, self.critical, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_warning_ok_ok_exit_code(self):
-        commands = [warning, ok, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.ok, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_warning_ok_warning_exit_code(self):
-        commands = [warning, ok, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.ok, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_warning_ok_critical_exit_code(self):
-        commands = [warning, ok, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.ok, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_warning_warning_ok_exit_code(self):
-        commands = [warning, warning, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.warning, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_warning_warning_warning_exit_code(self):
-        commands = [warning, warning, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.warning, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_one_warning_warning_critical_exit_code(self):
-        commands = [warning, warning, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.warning, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_one_warning_critical_ok_exit_code(self):
-        commands = [warning, critical, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.critical, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_warning_critical_warning_exit_code(self):
-        commands = [warning, critical, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.critical, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_one_warning_critical_critical_exit_code(self):
-        commands = [warning, critical, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.warning, self.critical, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_one_critical_ok_ok_exit_code(self):
-        commands = [critical, ok, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.ok, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_critical_ok_warning_exit_code(self):
-        commands = [critical, ok, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.ok, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_critical_ok_critical_exit_code(self):
-        commands = [critical, ok, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.ok, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_critical_warning_ok_exit_code(self):
-        commands = [critical, warning, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.warning, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_critical_warning_warning_exit_code(self):
-        commands = [critical, warning, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.warning, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_one_critical_warning_critical_exit_code(self):
-        commands = [critical, warning, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.warning, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_one_critical_critical_ok_exit_code(self):
-        commands = [critical, critical, ok]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.critical, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_one_critical_critical_warning_exit_code(self):
-        commands = [critical, critical, warning]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.critical, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_one_critical_critical_critical_exit_code(self):
-        commands = [critical, critical, critical]
-        exitcode,_ = process_results(run_commands(commands), "one")
+        commands = [self.critical, self.critical, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
 
     #
-    # Mode "all", all 3^3 possible results for three commands.
+    # MODE_WORST, all 3^3 possible results for three commands.
     #
     def test_mode_all_ok_ok_ok_exit_code(self):
-        commands = [ok, ok, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.ok, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_OK)
 
     def test_mode_all_ok_ok_warning_exit_code(self):
-        commands = [ok, ok, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.ok, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_all_ok_ok_critical_exit_code(self):
-        commands = [ok, ok, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.ok, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_ok_warning_ok_exit_code(self):
-        commands = [ok, warning, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.warning, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_all_ok_warning_warning_exit_code(self):
-        commands = [ok, warning, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.warning, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_all_ok_warning_critical_exit_code(self):
-        commands = [ok, warning, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.warning, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_ok_critical_ok_exit_code(self):
-        commands = [ok, critical, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.critical, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_ok_critical_warning_exit_code(self):
-        commands = [ok, critical, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.critical, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_ok_critical_critical_exit_code(self):
-        commands = [ok, critical, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.ok, self.critical, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_warning_ok_ok_exit_code(self):
-        commands = [warning, ok, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.ok, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_all_warning_ok_warning_exit_code(self):
-        commands = [warning, ok, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.ok, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_all_warning_ok_critical_exit_code(self):
-        commands = [warning, ok, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.ok, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_warning_warning_ok_exit_code(self):
-        commands = [warning, warning, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.warning, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_all_warning_warning_warning_exit_code(self):
-        commands = [warning, warning, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.warning, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_WARNING)
 
     def test_mode_all_warning_warning_critical_exit_code(self):
-        commands = [warning, warning, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.warning, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_warning_critical_ok_exit_code(self):
-        commands = [warning, critical, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.critical, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_warning_critical_warning_exit_code(self):
-        commands = [warning, critical, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.critical, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_warning_critical_critical_exit_code(self):
-        commands = [warning, critical, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.warning, self.critical, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_ok_ok_exit_code(self):
-        commands = [critical, ok, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.ok, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_ok_warning_exit_code(self):
-        commands = [critical, ok, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.ok, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_ok_critical_exit_code(self):
-        commands = [critical, ok, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.ok, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_warning_ok_exit_code(self):
-        commands = [critical, warning, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.warning, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_warning_warning_exit_code(self):
-        commands = [critical, warning, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.warning, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_warning_critical_exit_code(self):
-        commands = [critical, warning, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.warning, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_critical_ok_exit_code(self):
-        commands = [critical, critical, ok]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.critical, self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_critical_warning_exit_code(self):
-        commands = [critical, critical, warning]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.critical, self.warning]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
 
     def test_mode_all_critical_critical_critical_exit_code(self):
-        commands = [critical, critical, critical]
-        exitcode,_ = process_results(run_commands(commands), "all")
+        commands = [self.critical, self.critical, self.critical]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
