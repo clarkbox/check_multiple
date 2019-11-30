@@ -87,13 +87,13 @@ def main():
         "checks is successfull. `all` will return CRITICAL if any one of the "
         "checks fail. default is `all`.")
     parser.add_argument(
-        "commands",
+        "command",
         nargs="+",
         help="Checks to run. Enclose (separately) in quotes.")
 
     args = parser.parse_args()
 
-    commands_status = run_commands(args.commands)
+    commands_status = run_commands(args.command)
     return_status(commands_status, args.mode)
 
 
