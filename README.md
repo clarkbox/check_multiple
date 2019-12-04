@@ -28,7 +28,7 @@ define command {
 Command-line usage:
 
 ```
-usage: check_multiple.py [-h] [--mode {worst,best}] command [command ...]
+usage: check_multiple [-h] [--mode {worst,best}] command [command ...]
 
 Run multiple Nagios checks and combine the results.
 
@@ -42,9 +42,16 @@ optional arguments:
                        (default: worst)
 ```
 
-Run the test suite:
+To run the script from a development checkout, you'll need to tell
+python where it can find the "check_multiple" package:
+
 ```
-$ python -m unittest check_multiple.py
+$ PYTHONPATH="./lib" bin/check_multiple ...
+```
+
+The check_multiple package comes with a test suite that should always pass:
+```
+$ python -m unittest lib/check_multiple/check_multiple.py
 ......................................................
 ----------------------------------------------------------------------
 Ran 54 tests in 6.207s

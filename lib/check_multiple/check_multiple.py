@@ -1,7 +1,3 @@
-#!/usr/bin/python3
-
-import sys
-import argparse
 import subprocess
 import unittest
 from multiprocessing.pool import Pool
@@ -80,32 +76,6 @@ def run_commands(command_list):
     pool.join()
 
     return [ (result.returncode, result.stdout) for result in results ]
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description='Run multiple Nagios checks and combine the results.')
-    parser.add_argument(
-        "--mode",
-        default='worst',
-        choices=['worst', 'best'],
-        help="which individual check result should be the overall result; "
-             "either the \"worst\" one or the \"best\" one (default: worst)")
-    parser.add_argument(
-        "command",
-        nargs="+",
-        help="check to run, enclosed in quotes")
-
-    args = parser.parse_args()
-    mode = MODE_WORST
-    if args.mode == "best":
-        mode = MODE_BEST
-    exitcode,output = process_results(run_commands(args.command), mode)
-    print(output)
-    sys.exit(exitcode)
-
-if __name__ == "__main__":
-    main()
 
 
 
