@@ -24,10 +24,13 @@ def process_results(results, check_mode):
     according to `check_mode`, and return an overall (exitcode,
     output) pair.
     """
-    statuses = [ status for (status,_) in results ]
+    # Clamp any exit code outside the Nagios 0-3 range to UNKNOWN (3).
+    statuses = [ s if 0 <= s <= EXIT_UNKNOWN else EXIT_UNKNOWN
+                 for (s,_) in results ]
     critical_count = len([ s for s in statuses if s == EXIT_CRITICAL ])
     warning_count  = len([ s for s in statuses if s == EXIT_WARNING ])
     ok_count       = len([ s for s in statuses if s == EXIT_OK ])
+    unknown_count  = len([ s for s in statuses if s == EXIT_UNKNOWN ])
 
     suboutput = "\n".join(
         [ c_output.replace("\n", " ") for (_,c_output) in results
@@ -35,7 +38,8 @@ def process_results(results, check_mode):
 
     counts  = str(critical_count) + " critical, "
     counts += str(warning_count) + " warning, "
-    counts += str(ok_count) + " ok"
+    counts += str(ok_count) + " ok, "
+    counts += str(unknown_count) + " unknown"
 
     worst_status = max(statuses)
     best_status = min(statuses)
@@ -366,3 +370,39 @@ class ExitCodeTestCase(unittest.TestCase):
         commands = [self.critical, self.critical, self.critical]
         exitcode,_ = process_results(run_commands(commands), MODE_WORST)
         self.assertEqual(exitcode, EXIT_CRITICAL)
+
+
+    #
+    # Non-Nagios exit codes (outside 0-3) should be clamped to UNKNOWN.
+    #
+    def test_non_nagios_exit_code_clamped_to_unknown(self):
+        commands = ["exit 5"]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
+        self.assertEqual(exitcode, EXIT_UNKNOWN)
+
+    def test_non_nagios_high_exit_code_clamped_to_unknown(self):
+        commands = ["exit 255"]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
+        self.assertEqual(exitcode, EXIT_UNKNOWN)
+
+    def test_non_nagios_exit_code_best_mode(self):
+        commands = ["exit 5", self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_BEST)
+        self.assertEqual(exitcode, EXIT_OK)
+
+    def test_non_nagios_exit_code_worst_mode(self):
+        commands = ["exit 5", self.ok]
+        exitcode,_ = process_results(run_commands(commands), MODE_WORST)
+        self.assertEqual(exitcode, EXIT_UNKNOWN)
+
+    def test_non_nagios_exit_code_output_contains_unknown(self):
+        commands = ["exit 42"]
+        _,output = process_results(run_commands(commands), MODE_WORST)
+        self.assertIn("UNKNOWN", output)
+        self.assertIn("1 unknown", output)
+
+    def test_all_non_nagios_exit_codes(self):
+        commands = ["exit 4", "exit 10", "exit 99"]
+        exitcode,output = process_results(run_commands(commands), MODE_WORST)
+        self.assertEqual(exitcode, EXIT_UNKNOWN)
+        self.assertIn("3 unknown", output)
